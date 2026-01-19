@@ -4,20 +4,6 @@
  */
 
 export const CHART_PROPERTIES = {
-  // === DADOS ===
-  data: {
-    data_source: { type: "text", label: "Fonte de Dados", default: "", category: "Dados" },
-    data_format: { type: "select", label: "Formato", options: ["json", "csv", "tsv"], default: "json", category: "Dados" },
-    data_transformations: { type: "textarea", label: "Transformações", default: "", category: "Dados" },
-  },
-
-  // === DIMENSÕES ===
-  dimensions: {
-    width: { type: "number", label: "Largura", default: "container", category: "Dimensões" },
-    height: { type: "number", label: "Altura", default: 300, category: "Dimensões" },
-    autosize: { type: "select", label: "Auto-dimensionamento", options: ["fit", "pad", "none"], default: "fit", category: "Dimensões" },
-    padding: { type: "number", label: "Padding", default: 5, category: "Dimensões" },
-  },
 
   // === APARÊNCIA GERAL ===
   appearance: {
@@ -37,6 +23,10 @@ export const CHART_PROPERTIES = {
 
   // === CORES E PREENCHIMENTO ===
   colors: {
+    use_gradient: { type: "switch", label: "Usar Gradiente", default: false, category: "Cores" },
+    gradient_start: { type: "color", label: "Cor Inicial do Gradiente", default: "#4c78a8", category: "Cores" },
+    gradient_end: { type: "color", label: "Cor Final do Gradiente", default: "#e45756", category: "Cores" },
+    gradient_direction: { type: "select", label: "Direção do Gradiente", options: ["horizontal", "vertical", "diagonal"], default: "horizontal", category: "Cores" },
     color: { type: "color", label: "Cor", default: "#4c78a8", category: "Cores" },
     fill: { type: "color", label: "Preenchimento", default: "", category: "Cores" },
     stroke: { type: "color", label: "Contorno", default: "", category: "Cores" },
@@ -90,22 +80,14 @@ export const CHART_PROPERTIES = {
     tooltip_format: { type: "text", label: "Formato", default: "", category: "Tooltip" },
   },
 
-  // === ENCODINGS (MAPEAMENTOS) ===
-  encodings: {
-    encoding_x: { type: "text", label: "Eixo X - Campo", default: "category", category: "Encodings" },
-    encoding_y: { type: "text", label: "Eixo Y - Campo", default: "value", category: "Encodings" },
-    encoding_x2: { type: "text", label: "Eixo X2", default: "", category: "Encodings" },
-    encoding_y2: { type: "text", label: "Eixo Y2", default: "", category: "Encodings" },
-    encoding_color: { type: "text", label: "Cor - Campo", default: "", category: "Encodings" },
-    encoding_size: { type: "text", label: "Tamanho - Campo", default: "", category: "Encodings" },
-    encoding_shape: { type: "text", label: "Forma - Campo", default: "", category: "Encodings" },
-    encoding_opacity: { type: "text", label: "Opacidade - Campo", default: "", category: "Encodings" },
-    encoding_angle: { type: "text", label: "Ângulo - Campo", default: "", category: "Encodings" },
-    encoding_radius: { type: "text", label: "Raio - Campo", default: "", category: "Encodings" },
-    encoding_text: { type: "text", label: "Texto - Campo", default: "", category: "Encodings" },
-    encoding_detail: { type: "text", label: "Detalhe - Campo", default: "", category: "Encodings" },
-    encoding_order: { type: "text", label: "Ordem - Campo", default: "", category: "Encodings" },
-    encoding_tooltip: { type: "text", label: "Tooltip - Campo", default: "", category: "Encodings" },
+  // === EIXOS ===
+  axes: {
+    axis_x_title: { type: "text", label: "Título do Eixo X", default: "", category: "Eixos" },
+    axis_y_title: { type: "text", label: "Título do Eixo Y", default: "", category: "Eixos" },
+    encoding_x: { type: "text", label: "Campo do Eixo X", default: "category", category: "Eixos" },
+    encoding_y: { type: "text", label: "Campo do Eixo Y", default: "value", category: "Eixos" },
+    encoding_color: { type: "text", label: "Campo de Cor", default: "", category: "Eixos" },
+    encoding_size: { type: "text", label: "Campo de Tamanho", default: "", category: "Eixos" },
   },
 
   // === TRANSFORMAÇÕES DE DADOS ===
@@ -129,13 +111,6 @@ export const CHART_PROPERTIES = {
     scale_reverse: { type: "switch", label: "Inverter", default: false, category: "Escalas" },
   },
 
-  // === ANÁLISE ESTATÍSTICA ===
-  statistics: {
-    regression: { type: "select", label: "Regressão", options: ["none", "linear", "log", "exp", "pow", "quad", "poly"], default: "none", category: "Estatística" },
-    trendline: { type: "switch", label: "Linha de Tendência", default: false, category: "Estatística" },
-    error_type: { type: "select", label: "Tipo de Erro", options: ["none", "stderr", "stdev", "ci"], default: "none", category: "Estatística" },
-    confidence_level: { type: "slider", label: "Nível de Confiança", min: 0.8, max: 0.99, step: 0.01, default: 0.95, category: "Estatística" },
-  },
 
   // === LAYOUT E FACETAS ===
   layout: {
