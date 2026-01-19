@@ -22,3 +22,27 @@ export const registerSchema = z.object({
 export const validateRegister = (data) => {
   return registerSchema.parse(data);
 };
+
+// Schema para solicitar redefinição de senha
+export const forgotPasswordSchema = z.object({
+  email: z.string()
+    .email("Formato de e-mail inválido")
+    .toLowerCase()
+    .trim()
+});
+
+// Schema para redefinir senha com token
+export const resetPasswordSchema = z.object({
+  token: z.string()
+    .min(1, "Token é obrigatório"),
+  password: passwordValidation
+});
+
+// Funções auxiliares de validação
+export const validateForgotPassword = (data) => {
+  return forgotPasswordSchema.parse(data);
+};
+
+export const validateResetPassword = (data) => {
+  return resetPasswordSchema.parse(data);
+};

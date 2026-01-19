@@ -27,15 +27,16 @@ model User {
   passwordHash  String
   role          Role      @default(USER)
   plan          Plan      @default(FREE)
-  
-  chartsList    String[]  @default([]) 
-  
+
+  chartsList    String[]  @default([])
+
   createdAt     DateTime  @default(now())
   lastAccess    DateTime? @updatedAt
 
   // Relacionamentos
   charts        Chart[]
   logs          Log[]
+  passwordResets PasswordReset[]
 }
 
 // TABELA CHARTS
@@ -71,4 +72,20 @@ model Log {
   // Relacionamento opcional com usuário (logs de sistema podem não ter user)
   userId    String?
   user      User?    @relation(fields: [userId], references: [id])
+}
+
+// TABELA REDEFINIÇÃO DE SENHA
+model PasswordReset {
+  id        String   @id @default(uuid())
+  token     String   @unique
+  expiresAt DateTime
+  used      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  // Relacionamento com usuário
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([token])
+  @@index([userId])
 }
