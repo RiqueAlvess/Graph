@@ -171,15 +171,6 @@ function buildTransform(config) {
     });
   }
 
-  // Regressão
-  if (config.regression && config.regression !== "none") {
-    transform.push({
-      regression: config.encoding_y,
-      on: config.encoding_x,
-      method: config.regression
-    });
-  }
-
   // Time unit
   if (config.time_unit && config.encoding_x) {
     transform.push({
@@ -200,8 +191,18 @@ function buildMark(config, chartType) {
     type: config.mark_type || chartType.mark || "bar"
   };
 
-  // Cor
-  if (config.color) {
+  // Gradiente ou Cor sólida
+  if (config.use_gradient && config.gradient_start && config.gradient_end) {
+    // Para gradientes, usamos um esquema de cores personalizado
+    // Vega-Lite suporta gradientes através de esquemas de cores
+    mark.color = {
+      gradient: "linear",
+      stops: [
+        { offset: 0, color: config.gradient_start },
+        { offset: 1, color: config.gradient_end }
+      ]
+    };
+  } else if (config.color) {
     mark.color = config.color;
   }
 
@@ -393,18 +394,46 @@ function buildEncoding(config) {
 }
 
 /**
+ * Detecta automaticamente o tipo de dado baseado no nome do campo
+ */
+function detectFieldType(fieldName) {
+  if (!fieldName) return "quantitative";
+
+  const nominalFields = ["category", "name", "label", "type", "group", "id"];
+  const lowerField = fieldName.toLowerCase();
+
+  // Verifica se é um campo nominal
+  if (nominalFields.some(f => lowerField.includes(f))) {
+    return "nominal";
+  }
+
+  // Verifica se é temporal
+  if (lowerField.includes("date") || lowerField.includes("time") || lowerField.includes("year") || lowerField.includes("month")) {
+    return "temporal";
+  }
+
+  // Default: quantitative
+  return "quantitative";
+}
+
+/**
  * Constrói um canal de encoding (x ou y)
  */
 function buildEncodingChannel(config, axis) {
   const field = axis === "x" ? config.encoding_x : config.encoding_y;
+
+  // Detecta automaticamente o tipo de dado
+  const autoType = detectFieldType(field);
+
   const channel = {
     field,
-    type: "quantitative", // Default
+    type: autoType,
   };
 
   // Type baseado em agregação ou dados
   if (config.aggregation && config.aggregation !== "none") {
     channel.aggregate = config.aggregation;
+    channel.type = "quantitative"; // Agregações sempre retornam valores quantitativos
   }
 
   // Binning
@@ -471,6 +500,13 @@ function buildEncodingChannel(config, axis) {
     titleFontSize: (config.font_size || 12) + 2,
     labelAngle: axis === "x" ? config.text_angle || 0 : 0
   };
+
+  // Adiciona título personalizado do eixo
+  if (axis === "x" && config.axis_x_title) {
+    channel.axis.title = config.axis_x_title;
+  } else if (axis === "y" && config.axis_y_title) {
+    channel.axis.title = config.axis_y_title;
+  }
 
   return channel;
 }
@@ -556,25 +592,6 @@ function buildLayers(config, chartType, data) {
     mark: buildMark(config, chartType),
     encoding: buildEncoding(config)
   });
-
-  // Trendline
-  if (config.trendline) {
-    layers.push({
-      mark: {
-        type: "line",
-        color: "red",
-        strokeDash: [5, 5]
-      },
-      transform: [{
-        regression: config.encoding_y,
-        on: config.encoding_x
-      }],
-      encoding: {
-        x: { field: config.encoding_x, type: "quantitative" },
-        y: { field: config.encoding_y, type: "quantitative" }
-      }
-    });
-  }
 
   // Reference lines
   if (config.reference_lines) {

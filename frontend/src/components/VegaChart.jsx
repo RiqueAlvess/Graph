@@ -18,8 +18,8 @@ export function VegaChart({ spec, renderer = "canvas" }) {
   const deferredSpec = useDeferredValue(spec);
 
   useEffect(() => {
-    // Verifica se o container e a spec existem
-    if (!containerRef.current || !deferredSpec) {
+    // Verifica se o container e a spec existem e são válidos
+    if (!containerRef.current || !deferredSpec || !deferredSpec.data) {
       setIsLoading(false);
       return;
     }

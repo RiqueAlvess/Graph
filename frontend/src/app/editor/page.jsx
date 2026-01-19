@@ -35,8 +35,8 @@ export default function EditorPage() {
   // Sidebar position
   const [sidebarPosition, setSidebarPosition] = useState("left")
 
-  // Tipo de renderização
-  const [renderer, setRenderer] = useState("canvas")
+  // Tipo de renderização fixo em canvas
+  const renderer = "canvas"
 
   // Defer do config para melhor performance
   const deferredConfig = useDeferredValue(chartConfig)
@@ -347,18 +347,6 @@ export default function EditorPage() {
         <header className="h-16 border-b bg-white flex items-center justify-between px-6 shadow-sm">
           <div className="flex items-center gap-4">
             <h2 className="text-lg font-semibold text-zinc-900">Editor de Gráficos</h2>
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-zinc-500">Renderizador:</span>
-              <Select value={renderer} onValueChange={setRenderer}>
-                <SelectTrigger className="h-8 w-24 text-xs">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="canvas">Canvas</SelectItem>
-                  <SelectItem value="svg">SVG</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
           </div>
           <div className="flex items-center gap-4">
             <span className="text-xs text-zinc-500">Usuário: <span className="font-semibold text-zinc-900">{user.name}</span></span>
