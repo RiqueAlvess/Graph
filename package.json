@@ -8,6 +8,7 @@
     "fastify": "^5.7.1",
     "he": "^1.2.0",
     "resend": "^6.8.0",
+    "vega-embed": "^7.1.0",
     "zod": "^4.3.5"
   },
   "name": "graphite",
