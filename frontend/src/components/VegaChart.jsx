@@ -10,7 +10,7 @@ import vegaEmbed from 'vega-embed';
  */
 export function VegaChart({ spec, renderer = "canvas" }) {
   const containerRef = useRef(null);
-  const [view, setView] = useState(null);
+  const viewRef = useRef(null);
   const [error, setError] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -24,6 +24,7 @@ export function VegaChart({ spec, renderer = "canvas" }) {
       return;
     }
 
+    let isMounted = true;
     setIsLoading(true);
     setError(null);
 
@@ -48,42 +49,72 @@ export function VegaChart({ spec, renderer = "canvas" }) {
       tooltip: true, // Habilita tooltips
     };
 
-    // Limpa visualização anterior se existir
-    if (view) {
+    // Função assíncrona para renderizar
+    const renderChart = async () => {
       try {
-        view.finalize();
-      } catch (e) {
-        console.warn("Erro ao limpar visualização anterior:", e);
-      }
-    }
+        // Limpa visualização anterior se existir
+        if (viewRef.current) {
+          try {
+            viewRef.current.finalize();
+            viewRef.current = null;
+          } catch (e) {
+            console.warn("Erro ao limpar visualização anterior:", e);
+          }
+        }
 
-    // Renderiza novo gráfico
-    vegaEmbed(containerRef.current, finalSpec, embedOptions)
-      .then((result) => {
-        setView(result.view);
-        setIsLoading(false);
-        setError(null);
-      })
-      .catch((err) => {
+        // Limpa o container manualmente para evitar conflito com React
+        if (containerRef.current) {
+          containerRef.current.innerHTML = '';
+        }
+
+        // Aguarda um frame antes de renderizar o novo gráfico
+        await new Promise(resolve => requestAnimationFrame(resolve));
+
+        // Verifica se ainda está montado antes de renderizar
+        if (!isMounted || !containerRef.current) return;
+
+        // Renderiza novo gráfico
+        const result = await vegaEmbed(containerRef.current, finalSpec, embedOptions);
+
+        if (isMounted) {
+          viewRef.current = result.view;
+          setIsLoading(false);
+          setError(null);
+        } else {
+          // Se desmontou durante o render, limpa a view
+          result.view.finalize();
+        }
+      } catch (err) {
         console.error("Erro ao renderizar Vega:", err);
-        setError(err.message);
-        setIsLoading(false);
-      });
+        if (isMounted) {
+          setError(err.message);
+          setIsLoading(false);
+        }
+      }
+    };
+
+    renderChart();
 
     // Cleanup
     return () => {
-      if (view) {
+      isMounted = false;
+      if (viewRef.current) {
         try {
-          view.finalize();
+          viewRef.current.finalize();
+          viewRef.current = null;
         } catch (e) {
           // Ignora erros no cleanup
         }
+      }
+      // Limpa o container para evitar nós órfãos
+      if (containerRef.current) {
+        containerRef.current.innerHTML = '';
       }
     };
   }, [deferredSpec, renderer]);
 
   // Loading state
-  if (isLoading && !view) {
+  if (isLoading && !viewRef.current) {
     return (
       <div className="w-full h-full min-h-[300px] bg-white rounded-lg flex items-center justify-center">
         <div className="text-center">
