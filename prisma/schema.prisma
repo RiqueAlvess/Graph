@@ -1,0 +1,74 @@
+// Configuração do motor
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// ENUMS
+enum Role {
+  USER
+  ADMIN
+}
+
+enum Plan {
+  FREE
+  PREMIUM
+}
+
+// TABELA USUÁRIO
+model User {
+  id            String    @id @default(uuid())
+  name          String
+  email         String    @unique
+  passwordHash  String
+  role          Role      @default(USER)
+  plan          Plan      @default(FREE)
+  
+  chartsList    String[]  @default([]) 
+  
+  createdAt     DateTime  @default(now())
+  lastAccess    DateTime? @updatedAt
+
+  // Relacionamentos
+  charts        Chart[]
+  logs          Log[]
+}
+
+// TABELA CHARTS
+model Chart {
+  id          String   @id @default(uuid())
+  type        String   // Ex: "bar_chart", "pie_chart"...
+  
+  properties  Json     
+  
+  public      Boolean  @default(true)
+  nViews      Int      @default(0)
+  likes       Int      @default(0)
+  copy        Int      @default(0)
+  favorite    Int      @default(0)
+  
+  createdAt   DateTime @default(now())
+  lastEdit    DateTime @updatedAt
+  
+  // Relacionamento com dono
+  userId      String
+  user        User     @relation(fields: [userId], references: [id])
+  editBy      String?  // ID do último usuário que editou
+}
+
+// TABELA LOGS
+model Log {
+  id        String   @id @default(uuid())
+  action    String   // Ex: "LOGIN", "CHART_CREATE", "USER_UPDATE"
+  details   String?  // Texto livre descrevendo o evento
+  ip        String?
+  createdAt DateTime @default(now())
+
+  // Relacionamento opcional com usuário (logs de sistema podem não ter user)
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id])
+}
