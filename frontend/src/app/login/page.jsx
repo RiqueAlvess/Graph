@@ -1,7 +1,8 @@
 "use client"
 import { useState } from "react"
 import { useRouter } from "next/navigation"
-import { toast } from "sonner" 
+import Link from "next/link"
+import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -60,8 +61,16 @@ export default function LoginPage() {
               />
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="password">Senha</Label>
-              <Input id="password" type="password" required 
+              <div className="flex items-center justify-between">
+                <Label htmlFor="password">Senha</Label>
+                <Link
+                  href="/forgot-password"
+                  className="text-sm text-zinc-600 underline-offset-4 hover:underline"
+                >
+                  Esqueci minha senha
+                </Link>
+              </div>
+              <Input id="password" type="password" required
                 onChange={(e) => setPassword(e.target.value)}
               />
             </div>
