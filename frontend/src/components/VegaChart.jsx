@@ -1,96 +1,67 @@
 "use client"
 
-import { useEffect, useRef, useState, useDeferredValue } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import vegaEmbed from 'vega-embed';
 
-/**
- * Componente otimizado para renderizar gráficos Vega-Lite
- * Usa useDeferredValue para melhor performance com atualizações frequentes
- * Suporta renderização via Canvas (mais performático) ou SVG
- */
 export function VegaChart({ spec, renderer = "canvas" }) {
   const containerRef = useRef(null);
   const viewRef = useRef(null);
   const [error, setError] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Defer das atualizações do spec para evitar re-renders excessivos
-  const deferredSpec = useDeferredValue(spec);
-
   useEffect(() => {
-    // Verifica se o container e a spec existem e são válidos
-    if (!containerRef.current || !deferredSpec) {
+    if (!containerRef.current || !spec) {
       setIsLoading(false);
       return;
     }
-
-    // Log para debug - remover depois
-    console.log("VegaChart spec:", deferredSpec);
 
     let isMounted = true;
     setIsLoading(true);
     setError(null);
 
-    // Ajuste fino para garantir que o gráfico preencha o container
-    const finalSpec = {
-      ...deferredSpec,
-      // Garante responsividade se width for "container"
-      width: deferredSpec.width === "container" ? "container" : deferredSpec.width || 400,
-      height: deferredSpec.height || 300,
-      autosize: deferredSpec.autosize || {
-        type: "fit",
-        contains: "padding"
-      },
-    };
-
-    // Configurações de embed
-    const embedOptions = {
-      mode: "vega-lite",
-      actions: false, // Remove controles padrão
-      renderer: renderer, // Canvas é mais performático, SVG tem melhor qualidade
-      hover: true, // Habilita hover
-      tooltip: true, // Habilita tooltips
-    };
-
-    // Função assíncrona para renderizar
     const renderChart = async () => {
       try {
-        // Limpa visualização anterior se existir
+        // Limpa visualização anterior
         if (viewRef.current) {
-          try {
-            viewRef.current.finalize();
-            viewRef.current = null;
-          } catch (e) {
-            console.warn("Erro ao limpar visualização anterior:", e);
-          }
+          viewRef.current.finalize();
+          viewRef.current = null;
         }
 
-        // Limpa o container manualmente para evitar conflito com React
         if (containerRef.current) {
           containerRef.current.innerHTML = '';
         }
 
-        // Aguarda um frame antes de renderizar o novo gráfico
-        await new Promise(resolve => requestAnimationFrame(resolve));
+        // Pequeno delay para garantir que o DOM está limpo
+        await new Promise(resolve => setTimeout(resolve, 50));
 
-        // Verifica se ainda está montado antes de renderizar
         if (!isMounted || !containerRef.current) return;
 
-        // Renderiza novo gráfico
-        const result = await vegaEmbed(containerRef.current, finalSpec, embedOptions);
+        console.log("Renderizando spec:", spec);
+
+        // Configurações de embed
+        const embedOptions = {
+          mode: "vega-lite",
+          actions: false,
+          renderer: renderer,
+          hover: true,
+          tooltip: true,
+        };
+
+        // Renderiza o gráfico
+        const result = await vegaEmbed(containerRef.current, spec, embedOptions);
 
         if (isMounted) {
           viewRef.current = result.view;
           setIsLoading(false);
           setError(null);
+          console.log("Gráfico renderizado com sucesso");
         } else {
-          // Se desmontou durante o render, limpa a view
           result.view.finalize();
         }
       } catch (err) {
         console.error("Erro ao renderizar Vega:", err);
         if (isMounted) {
-          setError(err.message);
+          setError(err.message || "Erro desconhecido");
           setIsLoading(false);
         }
       }
@@ -98,7 +69,6 @@ export function VegaChart({ spec, renderer = "canvas" }) {
 
     renderChart();
 
-    // Cleanup
     return () => {
       isMounted = false;
       if (viewRef.current) {
@@ -106,18 +76,13 @@ export function VegaChart({ spec, renderer = "canvas" }) {
           viewRef.current.finalize();
           viewRef.current = null;
         } catch (e) {
-          // Ignora erros no cleanup
+          console.warn("Erro no cleanup:", e);
         }
       }
-      // Limpa o container para evitar nós órfãos
-      if (containerRef.current) {
-        containerRef.current.innerHTML = '';
-      }
     };
-  }, [deferredSpec, renderer]);
+  }, [spec, renderer]);
 
-  // Loading state
-  if (isLoading && !viewRef.current) {
+  if (isLoading) {
     return (
       <div className="w-full h-full min-h-[300px] bg-white rounded-lg flex items-center justify-center">
         <div className="text-center">
@@ -128,7 +93,6 @@ export function VegaChart({ spec, renderer = "canvas" }) {
     );
   }
 
-  // Error state
   if (error) {
     return (
       <div className="w-full h-full min-h-[300px] bg-red-50 rounded-lg flex items-center justify-center p-6">
@@ -148,56 +112,11 @@ export function VegaChart({ spec, renderer = "canvas" }) {
   return (
     <div
       ref={containerRef}
-      className="w-full h-full min-h-[300px] bg-white rounded-lg overflow-hidden"
+      className="w-full h-full min-h-[300px]"
       style={{
-        opacity: isLoading ? 0.5 : 1,
-        transition: 'opacity 0.2s ease-in-out'
+        position: 'relative',
+        minHeight: '400px'
       }}
     />
   );
-}
-
-/**
- * Hook para exportar o gráfico atual
- */
-export function useVegaExport(view) {
-  const exportToPNG = async () => {
-    if (!view) return null;
-    try {
-      const url = await view.toImageURL('png', 2); // 2x scale para alta qualidade
-      return url;
-    } catch (e) {
-      console.error("Erro ao exportar PNG:", e);
-      return null;
-    }
-  };
-
-  const exportToSVG = async () => {
-    if (!view) return null;
-    try {
-      const url = await view.toImageURL('svg');
-      return url;
-    } catch (e) {
-      console.error("Erro ao exportar SVG:", e);
-      return null;
-    }
-  };
-
-  const downloadImage = async (format = 'png', filename = 'chart') => {
-    const exportFunc = format === 'svg' ? exportToSVG : exportToPNG;
-    const url = await exportFunc();
-
-    if (url) {
-      const link = document.createElement('a');
-      link.download = `${filename}.${format}`;
-      link.href = url;
-      link.click();
-    }
-  };
-
-  return {
-    exportToPNG,
-    exportToSVG,
-    downloadImage
-  };
 }
