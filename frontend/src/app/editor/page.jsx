@@ -2,7 +2,8 @@
 
 import { useState, useMemo, useEffect, useDeferredValue } from "react"
 import { useRouter } from "next/navigation"
-import { VegaChart } from "@/components/VegaChart"
+import dynamic from 'next/dynamic'
+// import { VegaChart } from "@/components/VegaChart" // REMOVIDO - agora usa dynamic import
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
@@ -17,6 +18,19 @@ import { Separator } from "@/components/ui/separator"
 import { getPropertiesByCategory, getDefaultValues } from "@/utils/chartProperties"
 import { getAllChartTypes, getCategories } from "@/utils/chartTypes"
 import { buildVegaSpec, exportSpecToJSON, getExampleData } from "@/utils/specBuilder"
+
+// Importação dinâmica do VegaChart (evita problemas de SSR)
+const VegaChart = dynamic(
+  () => import('@/components/VegaChart').then(mod => mod.VegaChart),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="w-full h-full min-h-[300px] flex items-center justify-center">
+        <div className="text-sm text-zinc-500">Carregando visualização...</div>
+      </div>
+    )
+  }
+)
 
 export default function EditorPage() {
   const router = useRouter()
@@ -54,10 +68,22 @@ export default function EditorPage() {
 
   // Gera o spec Vega-Lite
   const vegaSpec = useMemo(() => {
-    const spec = buildVegaSpec(deferredConfig, chartData)
-    console.log("Generated spec:", spec)
-    console.log("Chart data:", chartData)
-    return spec
+    try {
+      const spec = buildVegaSpec(deferredConfig, chartData)
+      console.log("Generated spec:", JSON.stringify(spec, null, 2))
+      console.log("Chart data:", chartData)
+
+      // Validação básica
+      if (!spec || !spec.data || !spec.mark) {
+        console.error("Spec inválida:", spec)
+        return null
+      }
+
+      return spec
+    } catch (error) {
+      console.error("Erro ao gerar spec:", error)
+      return null
+    }
   }, [deferredConfig, chartData])
 
   // Exporta JSON
@@ -375,7 +401,14 @@ export default function EditorPage() {
               <span className="text-xs text-zinc-400 font-mono">{chartConfig.chart_type}</span>
             </div>
             <div className="flex-1 w-full flex items-center justify-center overflow-auto">
-              <VegaChart spec={vegaSpec} renderer={renderer} />
+              {vegaSpec ? (
+                <VegaChart spec={vegaSpec} renderer={renderer} />
+              ) : (
+                <div className="text-center text-zinc-500">
+                  <p>Erro ao gerar especificação do gráfico</p>
+                  <p className="text-xs mt-2">Verifique o console para mais detalhes</p>
+                </div>
+              )}
             </div>
           </div>
 

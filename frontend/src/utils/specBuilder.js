@@ -1,668 +1,247 @@
 /**
- * Constrói specs Vega-Lite a partir de configurações
+ * Constrói a especificação Vega-Lite completa
  */
-
-import { getChartTypeById } from './chartTypes';
-
-/**
- * Constrói uma spec Vega-Lite completa a partir da configuração
- * @param {Object} config - Configuração do gráfico
- * @param {Array} data - Dados a serem visualizados
- * @returns {Object} Spec Vega-Lite
- */
-export function buildVegaSpec(config, data = []) {
-  const chartType = getChartTypeById(config.chart_type) || { mark: "bar" };
-
-  // Spec base
+export function buildVegaSpec(config, data) {
   const spec = {
-    $schema: "https://vega.github.io/schema/vega-lite/v5.json",
-    description: config.description || config.accessibility_description || "",
-  };
-
-  // Título
-  if (config.title) {
-    spec.title = buildTitle(config);
+    "$schema": "https://vega.github.io/schema/vega-lite/v5.json",
+    description: config.description || "",
+    title: {
+      text: config.title || "Novo Gráfico",
+      fontSize: config.title_font_size || 16,
+      font: config.title_font || "sans-serif"
+    },
+    width: config.width || 400,
+    height: config.height || 300,
+    background: config.background || "#ffffff",
+    data: {
+      values: data
+    },
+    mark: {
+      type: getMarkType(config.chart_type),
+      color: config.mark_color || "#4c78a8",
+      ...(config.mark_size && { size: config.mark_size }),
+      ...(config.stroke_width && { strokeWidth: config.stroke_width }),
+      ...(config.mark_orient && { orient: config.mark_orient }),
+      tooltip: config.tooltip !== false
+    },
+    encoding: buildEncoding(config, data)
   }
 
-  // Dimensões
-  spec.width = config.width === "container" ? "container" : config.width || 400;
-  spec.height = config.height || 300;
-
-  // Autosize
-  if (config.autosize) {
-    spec.autosize = {
-      type: config.autosize,
-      contains: "padding"
-    };
+  // Só adiciona transform se realmente necessário
+  const transforms = buildTransforms(config, data)
+  if (transforms && transforms.length > 0) {
+    spec.transform = transforms
   }
 
-  // Background
-  if (config.background) {
-    spec.background = config.background;
-  }
-
-  // Padding
-  if (config.padding !== undefined) {
-    spec.padding = config.padding;
-  }
-
-  // Dados
-  spec.data = buildData(config, data);
-
-  // Transform
-  const transform = buildTransform(config);
-  if (transform.length > 0) {
-    spec.transform = transform;
-  }
-
-  // Mark
-  spec.mark = buildMark(config, chartType);
-
-  // Encoding
-  spec.encoding = buildEncoding(config);
-
-  // Config avançado
-  if (config.config_overrides) {
-    try {
-      const overrides = JSON.parse(config.config_overrides);
-      spec.config = overrides;
-    } catch (e) {
-      console.warn("Config overrides inválido:", e);
-    }
-  }
-
-  // Layer para gráficos compostos
-  if (config.layering) {
-    spec.layer = buildLayers(config, chartType, data);
-    delete spec.mark;
-    delete spec.encoding;
-  }
-
-  // Facet
-  if (config.facet_rows || config.facet_columns) {
-    return buildFacetSpec(spec, config);
-  }
-
-  // Repeat
-  if (config.repeat_fields) {
-    return buildRepeatSpec(spec, config);
-  }
-
-  return spec;
+  return spec
 }
 
 /**
- * Constrói o objeto de título
+ * Determina o tipo de mark baseado no chart_type
  */
-function buildTitle(config) {
-  const title = {
-    text: config.title
-  };
-
-  if (config.subtitle) {
-    title.subtitle = config.subtitle;
+function getMarkType(chartType) {
+  const markMap = {
+    'bar_chart': 'bar',
+    'horizontal_bar_chart': 'bar',
+    'line_chart': 'line',
+    'area_chart': 'area',
+    'scatter_plot': 'point',
+    'pie_chart': 'arc',
+    'donut_chart': 'arc',
   }
-
-  if (config.font_size) {
-    title.fontSize = config.font_size + 4;
-  }
-
-  if (config.font) {
-    title.font = config.font;
-  }
-
-  return title;
+  return markMap[chartType] || 'bar'
 }
 
 /**
- * Constrói o objeto de dados
+ * Constrói o objeto encoding com tipos corretos
  */
-function buildData(config, data) {
-  // Se tem URL de fonte de dados
-  if (config.data_source) {
-    const dataObj = { url: config.data_source };
+function buildEncoding(config, data) {
+  const encoding = {}
 
-    if (config.data_format && config.data_format !== "json") {
-      dataObj.format = { type: config.data_format };
+  // Detecta automaticamente os campos se não especificados
+  const firstRow = data[0] || {}
+  const fields = Object.keys(firstRow)
+
+  // Configuração do eixo X
+  const xField = config.x_field || fields[0]
+  if (xField) {
+    const xType = config.x_type || detectFieldType(data, xField)
+
+    encoding.x = {
+      field: xField,
+      type: xType,
+      ...(config.x_title && { title: config.x_title }),
+      ...(xType === 'quantitative' && config.x_scale_nice !== false && {
+        scale: { nice: true }
+      }),
+      axis: {
+        labelFontSize: config.axis_label_font_size || 12,
+        titleFontSize: config.axis_title_font_size || 14,
+        labelAngle: config.x_label_angle || 0
+      }
     }
 
-    return dataObj;
-  }
-
-  // Senão, usa os dados fornecidos
-  return { values: data };
-}
-
-/**
- * Constrói transformações de dados
- */
-function buildTransform(config) {
-  const transform = [];
-
-  // Filtro
-  if (config.filtering) {
-    try {
-      transform.push({
-        filter: config.filtering
-      });
-    } catch (e) {
-      console.warn("Filtro inválido:", e);
-    }
-  }
-
-  // Binning
-  if (config.binning && config.encoding_x) {
-    transform.push({
-      bin: true,
-      field: config.encoding_x,
-      as: `${config.encoding_x}_binned`
-    });
-  }
-
-  // Agregação
-  if (config.aggregation && config.aggregation !== "none") {
-    transform.push({
-      aggregate: [{
-        op: config.aggregation,
-        field: config.encoding_y,
-        as: `${config.encoding_y}_${config.aggregation}`
-      }],
-      groupby: config.grouping ? config.grouping.split(",").map(s => s.trim()) : [config.encoding_x]
-    });
-  }
-
-  // Time unit
-  if (config.time_unit && config.encoding_x) {
-    transform.push({
-      timeUnit: config.time_unit,
-      field: config.encoding_x,
-      as: `${config.encoding_x}_time`
-    });
-  }
-
-  return transform;
-}
-
-/**
- * Constrói o objeto de mark
- */
-function buildMark(config, chartType) {
-  const mark = {
-    type: config.mark_type || chartType.mark || "bar"
-  };
-
-  // Gradiente ou Cor sólida
-  if (config.use_gradient && config.gradient_start && config.gradient_end) {
-    // Para gradientes, usamos um esquema de cores personalizado
-    // Vega-Lite suporta gradientes através de esquemas de cores
-    mark.color = {
-      gradient: "linear",
-      stops: [
-        { offset: 0, color: config.gradient_start },
-        { offset: 1, color: config.gradient_end }
-      ]
-    };
-  } else if (config.color) {
-    mark.color = config.color;
-  }
-
-  // Opacidade
-  if (config.opacity !== undefined && config.opacity !== 1) {
-    mark.opacity = Number(config.opacity);
-  }
-
-  // Tamanho
-  if (config.size) {
-    mark.size = config.size;
-  }
-
-  // Stroke
-  if (config.stroke) {
-    mark.stroke = config.stroke;
-  }
-
-  // Fill
-  if (config.fill) {
-    mark.fill = config.fill;
-  }
-
-  // Corner radius
-  if (config.corner_radius) {
-    mark.cornerRadius = config.corner_radius;
-  }
-
-  // Line properties
-  if (config.line_width) {
-    mark.strokeWidth = config.line_width;
-  }
-
-  if (config.line_style && config.line_style !== "solid") {
-    mark.strokeDash = config.line_style === "dashed" ? [5, 5] : [2, 2];
-  }
-
-  if (config.line_cap && config.line_cap !== "butt") {
-    mark.strokeCap = config.line_cap;
-  }
-
-  if (config.line_join && config.line_join !== "miter") {
-    mark.strokeJoin = config.line_join;
-  }
-
-  // Interpolação para linhas
-  if ((mark.type === "line" || mark.type === "area") && config.interpolation) {
-    mark.interpolate = config.interpolation;
-  }
-
-  // Tensão
-  if (config.tension !== undefined && config.tension !== 0) {
-    mark.tension = config.tension;
-  }
-
-  // Orientação
-  if (config.mark_orientation) {
-    mark.orient = config.mark_orientation;
-  }
-
-  // Tooltip
-  mark.tooltip = true;
-
-  // Inner/Outer radius para arcs
-  if (mark.type === "arc") {
-    if (config.inner_radius) {
-      mark.innerRadius = config.inner_radius;
-    }
-    if (config.outer_radius) {
-      mark.outerRadius = config.outer_radius;
+    // Só adiciona timeUnit se o tipo for temporal E tiver configurado
+    if (xType === 'temporal' && config.x_time_unit) {
+      encoding.x.timeUnit = config.x_time_unit
     }
   }
 
-  return mark;
-}
+  // Configuração do eixo Y
+  const yField = config.y_field || fields[1]
+  if (yField) {
+    const yType = config.y_type || detectFieldType(data, yField)
 
-/**
- * Constrói o encoding
- */
-function buildEncoding(config) {
-  const encoding = {};
+    encoding.y = {
+      field: yField,
+      type: yType,
+      ...(config.y_title && { title: config.y_title }),
+      ...(yType === 'quantitative' && config.y_scale_nice !== false && {
+        scale: { nice: true }
+      }),
+      axis: {
+        labelFontSize: config.axis_label_font_size || 12,
+        titleFontSize: config.axis_title_font_size || 14,
+        labelAngle: config.y_label_angle || 0
+      }
+    }
 
-  // X axis
-  if (config.encoding_x) {
-    encoding.x = buildEncodingChannel(config, "x");
+    // Só adiciona timeUnit se o tipo for temporal E tiver configurado
+    if (yType === 'temporal' && config.y_time_unit) {
+      encoding.y.timeUnit = config.y_time_unit
+    }
   }
 
-  // Y axis
-  if (config.encoding_y) {
-    encoding.y = buildEncodingChannel(config, "y");
-  }
-
-  // X2 axis
-  if (config.encoding_x2) {
-    encoding.x2 = { field: config.encoding_x2 };
-  }
-
-  // Y2 axis
-  if (config.encoding_y2) {
-    encoding.y2 = { field: config.encoding_y2 };
-  }
-
-  // Color
-  if (config.encoding_color) {
+  // Adiciona cor se configurado
+  if (config.color_field) {
+    const colorType = config.color_type || detectFieldType(data, config.color_field)
     encoding.color = {
-      field: config.encoding_color,
-      type: "nominal",
-      scale: config.color_scheme ? { scheme: config.color_scheme } : undefined,
-      legend: config.legend_visibility ? buildLegend(config) : null
-    };
+      field: config.color_field,
+      type: colorType
+    }
   }
 
-  // Size
-  if (config.encoding_size) {
-    encoding.size = {
-      field: config.encoding_size,
-      type: "quantitative"
-    };
-  }
-
-  // Shape
-  if (config.encoding_shape) {
-    encoding.shape = {
-      field: config.encoding_shape,
-      type: "nominal"
-    };
-  }
-
-  // Opacity
-  if (config.encoding_opacity) {
-    encoding.opacity = {
-      field: config.encoding_opacity,
-      type: "quantitative"
-    };
-  }
-
-  // Angle (para arc/pie charts)
-  if (config.encoding_angle) {
-    encoding.theta = {
-      field: config.encoding_angle,
-      type: "quantitative",
-      stack: config.stacking !== "none" ? config.stacking : null
-    };
-  }
-
-  // Radius
-  if (config.encoding_radius) {
-    encoding.radius = {
-      field: config.encoding_radius,
-      type: "quantitative"
-    };
-  }
-
-  // Text
-  if (config.encoding_text) {
-    encoding.text = {
-      field: config.encoding_text,
-      type: config.labels_format ? "quantitative" : "nominal",
-      format: config.labels_format || undefined
-    };
-  }
-
-  // Detail
-  if (config.encoding_detail) {
-    encoding.detail = {
-      field: config.encoding_detail,
-      type: "nominal"
-    };
-  }
-
-  // Order
-  if (config.encoding_order) {
-    encoding.order = {
-      field: config.encoding_order,
-      type: "quantitative"
-    };
-  }
-
-  // Tooltip
-  if (config.encoding_tooltip) {
-    const tooltipFields = config.encoding_tooltip.split(",").map(f => f.trim());
-    encoding.tooltip = tooltipFields.map(field => ({
-      field,
-      type: "nominal"
-    }));
-  }
-
-  return encoding;
+  return encoding
 }
 
 /**
- * Detecta automaticamente o tipo de dado baseado no nome do campo
+ * Detecta automaticamente o tipo de campo baseado nos dados
  */
-function detectFieldType(fieldName) {
-  if (!fieldName) return "quantitative";
-
-  const nominalFields = ["category", "name", "label", "type", "group", "id"];
-  const lowerField = fieldName.toLowerCase();
-
-  // Verifica se é um campo nominal
-  if (nominalFields.some(f => lowerField.includes(f))) {
-    return "nominal";
+function detectFieldType(data, fieldName) {
+  if (!data || data.length === 0) {
+    return 'nominal'
   }
 
-  // Verifica se é temporal
-  if (lowerField.includes("date") || lowerField.includes("time") || lowerField.includes("year") || lowerField.includes("month")) {
-    return "temporal";
+  const sampleValue = data[0][fieldName]
+
+  // Verifica se é data
+  if (sampleValue instanceof Date) {
+    return 'temporal'
   }
 
-  // Default: quantitative
-  return "quantitative";
+  // Verifica se é string de data
+  if (typeof sampleValue === 'string') {
+    const dateFormats = [
+      /^\d{4}-\d{2}-\d{2}/, // YYYY-MM-DD
+      /^\d{4}-\d{2}/, // YYYY-MM
+      /^\d{4}\/\d{2}\/\d{2}/, // YYYY/MM/DD
+    ]
+
+    if (dateFormats.some(format => format.test(sampleValue))) {
+      return 'temporal'
+    }
+  }
+
+  // Verifica se é número
+  if (typeof sampleValue === 'number') {
+    return 'quantitative'
+  }
+
+  // Caso contrário, assume categórico
+  return 'nominal'
 }
 
 /**
- * Constrói um canal de encoding (x ou y)
+ * Constrói transforms (só quando necessário)
  */
-function buildEncodingChannel(config, axis) {
-  const field = axis === "x" ? config.encoding_x : config.encoding_y;
+function buildTransforms(config, data) {
+  const transforms = []
 
-  // Detecta automaticamente o tipo de dado
-  const autoType = detectFieldType(field);
-
-  const channel = {
-    field,
-    type: autoType,
-  };
-
-  // Type baseado em agregação ou dados
-  if (config.aggregation && config.aggregation !== "none") {
-    channel.aggregate = config.aggregation;
-    channel.type = "quantitative"; // Agregações sempre retornam valores quantitativos
+  // Só adiciona timeUnit transform se for temporal E tiver configurado
+  if (config.x_type === 'temporal' && config.x_time_unit) {
+    const xField = config.x_field || Object.keys(data[0] || {})[0]
+    transforms.push({
+      timeUnit: config.x_time_unit,
+      field: xField,
+      as: `${xField}_time`
+    })
   }
 
-  // Binning
-  if (config.binning && axis === "x") {
-    channel.bin = true;
+  if (config.y_type === 'temporal' && config.y_time_unit) {
+    const yField = config.y_field || Object.keys(data[0] || {})[1]
+    transforms.push({
+      timeUnit: config.y_time_unit,
+      field: yField,
+      as: `${yField}_time`
+    })
   }
 
-  // Time unit
-  if (config.time_unit) {
-    channel.timeUnit = config.time_unit;
-    channel.type = "temporal";
-  }
-
-  // Stack
-  if (config.stacking && config.stacking !== "none") {
-    channel.stack = config.stacking;
-  }
-
-  // Sort
-  if (config.sorting && config.sorting !== "none") {
-    channel.sort = config.sorting;
-  }
-
-  // Scale
-  if (config.scale_type || config.scale_domain || config.scale_range) {
-    channel.scale = {};
-
-    if (config.scale_type && config.scale_type !== "linear") {
-      channel.scale.type = config.scale_type;
-    }
-
-    if (config.scale_domain) {
-      try {
-        channel.scale.domain = JSON.parse(config.scale_domain);
-      } catch (e) {
-        console.warn("Domain inválido:", e);
-      }
-    }
-
-    if (config.scale_range) {
-      try {
-        channel.scale.range = JSON.parse(config.scale_range);
-      } catch (e) {
-        console.warn("Range inválido:", e);
-      }
-    }
-
-    if (config.scale_clamp) {
-      channel.scale.clamp = true;
-    }
-
-    if (config.scale_nice !== undefined) {
-      channel.scale.nice = config.scale_nice;
-    }
-
-    if (config.scale_reverse) {
-      channel.scale.reverse = true;
-    }
-  }
-
-  // Axis
-  channel.axis = {
-    labelFontSize: config.font_size || 12,
-    titleFontSize: (config.font_size || 12) + 2,
-    labelAngle: axis === "x" ? config.text_angle || 0 : 0
-  };
-
-  // Adiciona título personalizado do eixo
-  if (axis === "x" && config.axis_x_title) {
-    channel.axis.title = config.axis_x_title;
-  } else if (axis === "y" && config.axis_y_title) {
-    channel.axis.title = config.axis_y_title;
-  }
-
-  return channel;
+  return transforms
 }
 
 /**
- * Constrói configuração de legenda
- */
-function buildLegend(config) {
-  const legend = {};
-
-  if (config.legend_position && config.legend_position !== "none") {
-    legend.orient = config.legend_position;
-  }
-
-  if (config.legend_title) {
-    legend.title = config.legend_title;
-  }
-
-  if (config.legend_format) {
-    legend.format = config.legend_format;
-  }
-
-  if (config.legend_symbol && config.legend_symbol !== "circle") {
-    legend.symbolType = config.legend_symbol;
-  }
-
-  return legend;
-}
-
-/**
- * Constrói spec com facetas
- */
-function buildFacetSpec(baseSpec, config) {
-  const facetSpec = {
-    $schema: baseSpec.$schema,
-    data: baseSpec.data,
-    facet: {},
-    spec: {
-      mark: baseSpec.mark,
-      encoding: baseSpec.encoding
-    }
-  };
-
-  if (config.facet_rows) {
-    facetSpec.facet.row = { field: config.facet_rows, type: "nominal" };
-  }
-
-  if (config.facet_columns) {
-    facetSpec.facet.column = { field: config.facet_columns, type: "nominal" };
-  }
-
-  if (config.facet_spacing) {
-    facetSpec.spacing = config.facet_spacing;
-  }
-
-  return facetSpec;
-}
-
-/**
- * Constrói spec com repeat
- */
-function buildRepeatSpec(baseSpec, config) {
-  const fields = config.repeat_fields.split(",").map(f => f.trim());
-
-  return {
-    $schema: baseSpec.$schema,
-    repeat: { row: fields },
-    spec: {
-      ...baseSpec,
-      data: baseSpec.data
-    }
-  };
-}
-
-/**
- * Constrói layers para gráficos compostos
- */
-function buildLayers(config, chartType, data) {
-  const layers = [];
-
-  // Layer base
-  layers.push({
-    mark: buildMark(config, chartType),
-    encoding: buildEncoding(config)
-  });
-
-  // Reference lines
-  if (config.reference_lines) {
-    try {
-      const lines = JSON.parse(config.reference_lines);
-      lines.forEach(line => {
-        layers.push({
-          mark: "rule",
-          encoding: {
-            y: { datum: line.value }
-          }
-        });
-      });
-    } catch (e) {
-      console.warn("Reference lines inválidas:", e);
-    }
-  }
-
-  return layers;
-}
-
-/**
- * Exporta spec para JSON
+ * Exporta spec como JSON formatado
  */
 export function exportSpecToJSON(spec) {
-  return JSON.stringify(spec, null, 2);
+  return JSON.stringify(spec, null, 2)
 }
 
 /**
- * Dados de exemplo baseados no tipo de gráfico
+ * Retorna dados de exemplo baseado no tipo de gráfico
  */
 export function getExampleData(chartType) {
-  // Dados genéricos
-  const genericData = [
-    { category: "A", value: 28 },
-    { category: "B", value: 55 },
-    { category: "C", value: 43 },
-    { category: "D", value: 91 },
-    { category: "E", value: 81 },
-    { category: "F", value: 53 }
-  ];
-
-  // Dados temporais
-  const timeData = [
-    { date: "2024-01", value: 28 },
-    { date: "2024-02", value: 55 },
-    { date: "2024-03", value: 43 },
-    { date: "2024-04", value: 91 },
-    { date: "2024-05", value: 81 },
-    { date: "2024-06", value: 53 }
-  ];
-
-  // Dados para scatter/bubble
-  const scatterData = [
-    { x: 10, y: 20, category: "A", size: 100 },
-    { x: 20, y: 35, category: "B", size: 150 },
-    { x: 30, y: 25, category: "C", size: 80 },
-    { x: 40, y: 50, category: "A", size: 200 },
-    { x: 50, y: 45, category: "B", size: 120 },
-    { x: 60, y: 30, category: "C", size: 90 }
-  ];
-
-  if (!chartType) return genericData;
-
-  if (chartType.includes("time") || chartType.includes("temporal")) {
-    return timeData;
+  const examples = {
+    bar_chart: [
+      { category: "A", value: 28 },
+      { category: "B", value: 55 },
+      { category: "C", value: 43 },
+      { category: "D", value: 91 },
+      { category: "E", value: 81 },
+      { category: "F", value: 53 }
+    ],
+    horizontal_bar_chart: [
+      { category: "A", value: 28 },
+      { category: "B", value: 55 },
+      { category: "C", value: 43 },
+      { category: "D", value: 91 },
+      { category: "E", value: 81 },
+      { category: "F", value: 53 }
+    ],
+    line_chart: [
+      { date: "2024-01", value: 28 },
+      { date: "2024-02", value: 55 },
+      { date: "2024-03", value: 43 },
+      { date: "2024-04", value: 91 },
+      { date: "2024-05", value: 81 },
+      { date: "2024-06", value: 53 }
+    ],
+    area_chart: [
+      { date: "2024-01", value: 28 },
+      { date: "2024-02", value: 55 },
+      { date: "2024-03", value: 43 },
+      { date: "2024-04", value: 91 },
+      { date: "2024-05", value: 81 },
+      { date: "2024-06", value: 53 }
+    ],
+    scatter_plot: [
+      { x: 28, y: 35 },
+      { x: 55, y: 42 },
+      { x: 43, y: 58 },
+      { x: 91, y: 23 },
+      { x: 81, y: 67 },
+      { x: 53, y: 44 }
+    ],
   }
 
-  if (chartType.includes("scatter") || chartType.includes("bubble")) {
-    return scatterData;
-  }
-
-  return genericData;
+  return examples[chartType] || examples.bar_chart
 }
