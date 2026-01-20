@@ -19,10 +19,13 @@ export function VegaChart({ spec, renderer = "canvas" }) {
 
   useEffect(() => {
     // Verifica se o container e a spec existem e são válidos
-    if (!containerRef.current || !deferredSpec || !deferredSpec.data) {
+    if (!containerRef.current || !deferredSpec) {
       setIsLoading(false);
       return;
     }
+
+    // Log para debug - remover depois
+    console.log("VegaChart spec:", deferredSpec);
 
     let isMounted = true;
     setIsLoading(true);

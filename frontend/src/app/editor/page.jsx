@@ -54,7 +54,10 @@ export default function EditorPage() {
 
   // Gera o spec Vega-Lite
   const vegaSpec = useMemo(() => {
-    return buildVegaSpec(deferredConfig, chartData)
+    const spec = buildVegaSpec(deferredConfig, chartData)
+    console.log("Generated spec:", spec)
+    console.log("Chart data:", chartData)
+    return spec
   }, [deferredConfig, chartData])
 
   // Exporta JSON
