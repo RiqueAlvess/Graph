@@ -73,7 +73,7 @@ export function buildVegaSpec(config, data) {
 
   // Se dados de exemplo foram fornecidos, adiciona inline
   // Caso contrário, mantém { name: "dataset" } para Power BI
-  if (data && data.length > 0 && config.use_example_data) {
+  if (data && data.length > 0) {
     specWithFeatures.data = { values: data };
   }
 
